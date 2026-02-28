@@ -36,6 +36,22 @@
     document.getElementById('errorMsg').style.display = 'none';
   }
 
+  function setProgress(percent, text) {
+    var wrap = document.getElementById('progressWrap');
+    var fill = document.getElementById('progressFill');
+    var txt = document.getElementById('progressText');
+    if (!wrap || !fill || !txt) return;
+    percent = Math.min(100, Math.max(0, percent));
+    wrap.classList.add('visible');
+    fill.style.width = percent + '%';
+    txt.textContent = text != null ? text : percent + '%';
+  }
+
+  function hideProgress() {
+    var wrap = document.getElementById('progressWrap');
+    if (wrap) wrap.classList.remove('visible');
+  }
+
   function getDefaultAppJsx() {
     return [
       'function App() {',
@@ -284,10 +300,13 @@
     var extraPackages = getExtraPackages();
     var tailwindIncluded = getTailwindInclude();
 
+    setProgress(0, '0% - 준비 중...');
+
     var zip = new JSZip();
     var srcFolder = zip.folder(projectName + '/src');
 
     zip.file(projectName + '/package.json', getPackageJson(projectName, extraPackages, tailwindIncluded));
+    setProgress(15, '15% - 파일 구성 중...');
     zip.file(projectName + '/vite.config.js', getViteConfig());
     zip.file(projectName + '/index.html', getIndexHtml(projectName));
     zip.file(projectName + '/.gitignore', getGitignore());
@@ -295,6 +314,7 @@
     zip.file(projectName + '/run.bat', getRunBat());
     srcFolder.file('App.jsx', appCode);
     srcFolder.file('main.jsx', getMainJsx(tailwindIncluded));
+    setProgress(30, '30% - ZIP 압축 중...');
 
     if (tailwindIncluded) {
       zip.file(projectName + '/tailwind.config.js', getTailwindConfig());
@@ -302,8 +322,25 @@
       srcFolder.file('index.css', getIndexCss());
     }
 
+    var progressValue = 30;
+    var progressInterval = setInterval(function () {
+      if (progressValue < 90) {
+        progressValue = Math.min(90, progressValue + 8);
+        setProgress(progressValue, progressValue + '% - ZIP 압축 중...');
+      }
+    }, 200);
+
     zip.generateAsync({ type: 'blob' }).then(function (content) {
+      clearInterval(progressInterval);
+      setProgress(100, '100% - 완료! 다운로드 중...');
       saveAs(content, projectName + '.zip');
+      setTimeout(function () {
+        hideProgress();
+      }, 1500);
+    }).catch(function (err) {
+      clearInterval(progressInterval);
+      hideProgress();
+      showError('ZIP 생성 실패: ' + (err && err.message ? err.message : String(err)));
     });
   }
 

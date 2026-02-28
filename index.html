@@ -19,6 +19,11 @@
     .extra-packages { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 8px; }
     .extra-packages label { margin-top: 0; font-weight: normal; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
     .extra-packages input[type="checkbox"] { margin: 0; }
+    #progressWrap { margin-top: 16px; display: none; }
+    #progressWrap.visible { display: block; }
+    #progressBar { height: 24px; background: #e0e0e0; border-radius: 12px; overflow: hidden; }
+    #progressFill { height: 100%; width: 0%; background: #1976d2; border-radius: 12px; transition: width 0.2s ease; }
+    #progressText { margin-top: 6px; font-size: 14px; color: #666; }
   </style>
 </head>
 <body>
@@ -54,6 +59,10 @@
   </div>
 
   <button type="button" onclick="generateProject()">Generate ZIP (GitHub용 프로젝트 생성)</button>
+  <div id="progressWrap">
+    <div id="progressBar"><div id="progressFill"></div></div>
+    <div id="progressText">0%</div>
+  </div>
   <div id="errorMsg" role="alert"></div>
 
   <script src="app.js"></script>
