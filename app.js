@@ -12,8 +12,13 @@
   }
 
   function getExtraPackages() {
-    var raw = (document.getElementById('extraPackages') && document.getElementById('extraPackages').value) || '';
-    return raw.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    var checkboxes = document.querySelectorAll('input[name="extraPkg"]:checked');
+    var list = [];
+    for (var i = 0; i < checkboxes.length; i++) {
+      var val = checkboxes[i].value;
+      if (val) list.push(val);
+    }
+    return list;
   }
 
   function getTailwindInclude() {
