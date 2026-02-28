@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>React Structurizer MVP</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; max-width: 900px; margin: 0 auto; }
+    h2 { margin-top: 0; }
+    label { display: block; margin-top: 12px; font-weight: bold; }
+    input[type="text"] { padding: 8px; width: 300px; box-sizing: border-box; }
+    textarea { width: 100%; height: 300px; padding: 10px; box-sizing: border-box; font-family: monospace; font-size: 13px; }
+    button { padding: 10px 20px; margin-top: 16px; cursor: pointer; background: #1976d2; color: #fff; border: none; border-radius: 4px; font-size: 14px; }
+    button:hover { background: #1565c0; }
+    #errorMsg { color: #c00; margin-top: 12px; padding: 10px; background: #ffebee; border-radius: 4px; display: none; }
+    #errorMsg code { background: #fff; padding: 2px 6px; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+  <h2>React Structurizer MVP</h2>
+  <p style="color:#666; font-size:14px; margin-bottom:16px;">React 컴포넌트 코드를 붙여넣으면 Vite + React 프로젝트 구조의 ZIP을 생성합니다. GitHub에 올려 <code>npm install && npm run dev</code>로 바로 실행할 수 있습니다.</p>
+
+  <label for="projectName">프로젝트 이름 (폴더명):</label>
+  <input type="text" id="projectName" value="generated-react-app" />
+
+  <label for="codeArea">메인 React 컴포넌트 코드:</label>
+  <textarea id="codeArea" placeholder="import React, { useState } from 'react';\nimport { Icon } from 'lucide-react';\n\nexport default function App() {\n  return <div>Hello</div>;\n}\n\n→ 위처럼 import 포함한 전체 코드를 그대로 붙여넣으세요. 이 코드가 App.jsx로 들어가 메인 컴포넌트가 됩니다. 비워두면 기본 앱이 들어갑니다."></textarea>
+
+  <label for="extraPackages">추가 npm 패키지 (쉼표 구분):</label>
+  <input type="text" id="extraPackages" placeholder="예: lucide-react" style="width:100%; max-width:400px;" />
+
+  <div style="margin-top:12px;">
+    <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+      <input type="checkbox" id="tailwindInclude" />
+      <span>Tailwind CSS 포함 (className 스타일 사용 시 체크)</span>
+    </label>
+  </div>
+
+  <button type="button" onclick="generateProject()">Generate ZIP (GitHub용 프로젝트 생성)</button>
+  <div id="errorMsg" role="alert"></div>
+
+  <script src="app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "name": "react-structurizer-mvp",
+  "private": true,
+  "scripts": {
+    "start": "npx http-server . -p 3000 -o",
+    "serve": "npx http-server . -p 3000 -o"
+  }
+}
