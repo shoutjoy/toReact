@@ -200,7 +200,15 @@
       '',
       '## 실행 방법',
       '',
-      '**Windows:** 프로젝트 폴더에서 `run.bat` 더블클릭 (npm 설치 여부 확인 후 `npm install` → `npm run dev` 실행)',
+      '**Windows:** 압축 해제 후 `실행.bat` 더블클릭. CMD가 열리며 npm 확인 → 필요 시 npm install → npm run dev 자동 실행.',
+      '',
+      '### ⚠️ "파일을 복사할 수 없음" / Windows 보안 경고가 뜨는 경우',
+      '',
+      '인터넷에서 받은 파일로 인식되어 Windows가 차단할 수 있습니다.',
+      '',
+      '1. **실행.bat** 우클릭 → **속성**',
+      '2. **일반** 탭 맨 아래 **"차단 해제"** 체크 → **확인**',
+      '3. 다시 **실행.bat** 더블클릭',
       '',
       '**또는 터미널에서:**',
       '',
@@ -218,6 +226,28 @@
       'npm run preview',
       '```'
     ].join('\n');
+  }
+
+  function getRunFirstTxt() {
+    return [
+      '========================================',
+      '  실행.bat 실행 전 꼭 읽어 주세요',
+      '========================================',
+      '',
+      'ZIP 압축 해제 후 실행.bat을 더블클릭했을 때',
+      '"파일을 복사할 수 없음" 또는 Windows 보안 경고가',
+      '뜨는 경우가 있습니다.',
+      '',
+      '▶ 해결 방법:',
+      '  1. 실행.bat 우클릭',
+      '  2. 속성 클릭',
+      '  3. 일반 탭 맨 아래 "차단 해제" 체크',
+      '  4. 확인 클릭',
+      '  5. 다시 실행.bat 더블클릭',
+      '',
+      '이렇게 하면 정상적으로 실행됩니다.',
+      '========================================'
+    ].join('\r\n');
   }
 
   function getIndexCss() {
@@ -318,7 +348,8 @@
     zip.file(projectName + '/index.html', getIndexHtml(projectName));
     zip.file(projectName + '/.gitignore', getGitignore());
     zip.file(projectName + '/README.md', getReadme(projectName));
-    zip.file(projectName + '/run.bat', getRunBat());
+    zip.file(projectName + '/실행 전 읽기.txt', getRunFirstTxt());
+    zip.file(projectName + '/실행.bat', getRunBat());
     srcFolder.file('App.jsx', appCode);
     srcFolder.file('main.jsx', getMainJsx(tailwindIncluded));
     setProgress(30, '30% - ZIP 압축 중...');
