@@ -21,6 +21,46 @@
     return list;
   }
 
+  /** 코드에서 import/require 로 사용된 패키지명만 추출 (배열 반환) */
+  function getPackagesFromCode(code) {
+    var packages = Object.create(null);
+    if (!code || typeof code !== 'string') return [];
+    var fromRegex = /from\s+['"]([^'"]+)['"]/g;
+    var requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    var m;
+    while ((m = fromRegex.exec(code)) !== null) {
+      var pkg = m[1].split('/')[0].trim();
+      if (pkg && pkg !== 'react' && pkg !== 'react-dom') packages[pkg] = true;
+    }
+    while ((m = requireRegex.exec(code)) !== null) {
+      var pkg = m[1].split('/')[0].trim();
+      if (pkg && pkg !== 'react' && pkg !== 'react-dom') packages[pkg] = true;
+    }
+    return Object.keys(packages);
+  }
+
+  /** 코드에서 import/require 패키지명 추출 후, 추가 npm 패키지 체크박스 자동 선택 */
+  function syncExtraPackagesFromCode() {
+    var code = (document.getElementById('codeArea') && document.getElementById('codeArea').value) || '';
+    var packages = Object.create(null);
+    var fromRegex = /from\s+['"]([^'"]+)['"]/g;
+    var requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    var m;
+    while ((m = fromRegex.exec(code)) !== null) {
+      var pkg = m[1].split('/')[0];
+      if (pkg && pkg !== 'react' && pkg !== 'react-dom') packages[pkg] = true;
+    }
+    while ((m = requireRegex.exec(code)) !== null) {
+      var pkg = m[1].split('/')[0];
+      if (pkg && pkg !== 'react' && pkg !== 'react-dom') packages[pkg] = true;
+    }
+    var checkboxes = document.querySelectorAll('input[name="extraPkg"]');
+    for (var i = 0; i < checkboxes.length; i++) {
+      var cb = checkboxes[i];
+      cb.checked = !!packages[cb.value];
+    }
+  }
+
   function getTailwindInclude() {
     var el = document.getElementById('tailwindInclude');
     return el ? el.checked : false;
@@ -339,6 +379,11 @@
     var code = getAppCode();
     var appCode = code || getDefaultAppJsx();
     var extraPackages = getExtraPackages();
+    var packagesFromCode = getPackagesFromCode(appCode);
+    var allPackages = extraPackages.slice();
+    packagesFromCode.forEach(function (pkg) {
+      if (allPackages.indexOf(pkg) === -1) allPackages.push(pkg);
+    });
     var tailwindIncluded = getTailwindInclude();
 
     setProgress(0, '0% - 준비 중...');
@@ -346,7 +391,7 @@
     var zip = new JSZip();
     var srcFolder = zip.folder(projectName + '/src');
 
-    zip.file(projectName + '/package.json', getPackageJson(projectName, extraPackages, tailwindIncluded));
+    zip.file(projectName + '/package.json', getPackageJson(projectName, allPackages, tailwindIncluded));
     setProgress(15, '15% - 파일 구성 중...');
     zip.file(projectName + '/vite.config.js', getViteConfig());
     zip.file(projectName + '/index.html', getIndexHtml(projectName));
@@ -387,4 +432,13 @@
   }
 
   window.generateProject = generateProject;
+
+  var codeArea = document.getElementById('codeArea');
+  if (codeArea) {
+    codeArea.addEventListener('input', syncExtraPackagesFromCode);
+    codeArea.addEventListener('paste', function () {
+      setTimeout(syncExtraPackagesFromCode, 0);
+    });
+    syncExtraPackagesFromCode();
+  }
 })();

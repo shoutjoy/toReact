@@ -24,6 +24,8 @@
     #progressBar { height: 24px; background: #e0e0e0; border-radius: 12px; overflow: hidden; }
     #progressFill { height: 100%; width: 0%; background: #1976d2; border-radius: 12px; transition: width 0.2s ease; }
     #progressText { margin-top: 6px; font-size: 14px; color: #666; }
+    .btn-clear { padding: 6px 12px; cursor: pointer; background: #fff; color: #666; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+    .btn-clear:hover { background: #f5f5f5; border-color: #999; }
   </style>
 </head>
 <body>
@@ -43,7 +45,10 @@
   <label for="projectName">프로젝트 이름 (폴더명):</label>
   <input type="text" id="projectName" value="generated-react-app" />
 
-  <label for="codeArea">메인 React 컴포넌트 코드:</label>
+  <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+    <label for="codeArea" style="margin-top:0;">메인 React 컴포넌트 코드:</label>
+    <button type="button" class="btn-clear" onclick="document.getElementById('codeArea').value='';">내용 지우기</button>
+  </div>
   <textarea id="codeArea" placeholder="import React, { useState } from 'react';\nimport { Icon } from 'lucide-react';\n\nexport default function App() {\n  return <div>Hello</div>;\n}\n\n→ 위처럼 import 포함한 전체 코드를 그대로 붙여넣으세요. 이 코드가 App.jsx로 들어가 메인 컴포넌트가 됩니다. 비워두면 기본 앱이 들어갑니다."></textarea>
 
   <label>추가 npm 패키지 (필요한 것만 선택):</label>
