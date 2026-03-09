@@ -3,81 +3,278 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>React Structurizer MVP</title>
+  <title>React Structurizer MVP by 박중희</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; max-width: 900px; margin: 0 auto; }
-    h2 { margin-top: 0; }
+    :root {
+      --bg-main: #f5f5f5;
+      --bg-sidebar: #fafafa;
+      --bg-input: #fff;
+      --text: #333;
+      --text-muted: #666;
+      --border: #e0e0e0;
+      --accent: #1976d2;
+      --accent-hover: #1565c0;
+      --error-bg: #ffebee;
+      --error-text: #c00;
+      --progress-bg: #e0e0e0;
+      --progress-fill: #1976d2;
+      --info-bg: #e3f2fd;
+      --info-border: #90caf9;
+    }
+    [data-theme="dark"] {
+      --bg-main: #1e1e1e;
+      --bg-sidebar: #252526;
+      --bg-input: #3c3c3c;
+      --text: #e0e0e0;
+      --text-muted: #9e9e9e;
+      --border: #404040;
+      --accent: #42a5f5;
+      --accent-hover: #64b5f6;
+      --error-bg: #5c2a2a;
+      --error-text: #ef9a9a;
+      --progress-bg: #404040;
+      --progress-fill: #42a5f5;
+      --info-bg: #1e3a5f;
+      --info-border: #42a5f5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background: var(--bg-main);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      transition: background 0.2s, color 0.2s;
+    }
+    .app-wrap { display: flex; flex: 1; min-height: 0; }
+    .sidebar {
+      width: 280px;
+      min-width: 180px;
+      max-width: 50vw;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: width 0.2s, min-width 0.2s;
+    }
+    .sidebar.sidebar-hidden { width: 0; min-width: 0; padding: 0; overflow: hidden; border-right: none; }
+    .sidebar-wrap { position: relative; display: flex; flex-shrink: 0; min-width: 24px; }
+    .sidebar-wrap.sidebar-wrap-collapsed { min-width: 24px; }
+    .sidebar-resize-handle {
+      width: 6px; flex-shrink: 0; cursor: col-resize;
+      background: var(--border); transition: background 0.15s;
+      user-select: none; touch-action: none;
+    }
+    .sidebar.sidebar-hidden + .sidebar-resize-handle { display: none; }
+    .sidebar-resize-handle:hover { background: var(--accent); }
+    .sidebar-resize-handle:active { background: var(--accent-hover); }
+    .sidebar-toggle {
+      position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+      width: 24px; height: 56px; padding: 0; border: 1px solid var(--border); border-left: none;
+      background: var(--bg-sidebar); color: var(--text-muted); cursor: pointer; font-size: 11px;
+      border-radius: 0 8px 8px 0; z-index: 10; display: flex; align-items: center; justify-content: center; line-height: 1.2;
+    }
+    .sidebar-toggle:hover { background: var(--accent); color: #fff; }
+    .sidebar-title { font-weight: bold; font-size: 12px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; }
+    .sidebar-btns { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+    .sidebar-btns button { padding: 8px 12px; cursor: pointer; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 13px; text-align: left; }
+    .sidebar-btns button:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .history-list { flex: 1; overflow-y: auto; min-height: 0; }
+    .history-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      padding: 8px 10px; margin-bottom: 4px; cursor: pointer; border-radius: 4px; font-size: 12px;
+      background: var(--bg-input); border: 1px solid var(--border); color: var(--text);
+      min-height: 0;
+    }
+    .history-item-content { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-item:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .history-item time { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+    .history-item:hover time { color: rgba(255,255,255,0.8); }
+    .history-item-delete {
+      flex-shrink: 0; width: 22px; height: 22px; padding: 0; border: none; border-radius: 4px;
+      background: transparent; color: var(--text-muted); cursor: pointer; font-size: 14px; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .history-item-delete:hover { background: rgba(0,0,0,0.2); color: #fff; }
+    .history-item:hover .history-item-delete { color: rgba(255,255,255,0.9); }
+    .history-item:hover .history-item-delete:hover { background: rgba(255,255,255,0.25); }
+    .main { flex: 1; padding: 20px; overflow-y: auto; min-width: 0; max-width: 900px; }
+    .header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+    h2 { margin: 0; font-size: 1.4rem; }
+    .theme-toggle { padding: 6px 12px; cursor: pointer; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-input); color: var(--text); font-size: 13px; }
+    .theme-toggle:hover { background: var(--accent); color: #fff; }
     label { display: block; margin-top: 12px; font-weight: bold; }
-    input[type="text"] { padding: 8px; width: 300px; box-sizing: border-box; }
-    textarea { width: 100%; height: 300px; padding: 10px; box-sizing: border-box; font-family: monospace; font-size: 13px; }
-    button { padding: 10px 20px; margin-top: 16px; cursor: pointer; background: #1976d2; color: #fff; border: none; border-radius: 4px; font-size: 14px; }
-    button:hover { background: #1565c0; }
-    #errorMsg { color: #c00; margin-top: 12px; padding: 10px; background: #ffebee; border-radius: 4px; display: none; }
-    #errorMsg code { background: #fff; padding: 2px 6px; border-radius: 2px; }
+    input[type="text"] { padding: 8px; width: 100%; max-width: 400px; box-sizing: border-box; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+    textarea { width: 100%; height: 300px; padding: 10px; box-sizing: border-box; font-family: monospace; font-size: 13px; background: var(--bg-input); color: var(--text); border: 1px solid var(--border); border-radius: 4px; resize: vertical; }
+    button.primary { padding: 10px 20px; margin-top: 16px; cursor: pointer; background: var(--accent); color: #fff; border: none; border-radius: 4px; font-size: 14px; }
+    button.primary:hover { background: var(--accent-hover); }
+    #errorMsg { color: var(--error-text); margin-top: 12px; padding: 10px; background: var(--error-bg); border-radius: 4px; display: none; }
+    #errorMsg code { background: var(--bg-input); padding: 2px 6px; border-radius: 2px; }
     .extra-packages { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 8px; }
     .extra-packages label { margin-top: 0; font-weight: normal; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
     .extra-packages input[type="checkbox"] { margin: 0; }
     #progressWrap { margin-top: 16px; display: none; }
     #progressWrap.visible { display: block; }
-    #progressBar { height: 24px; background: #e0e0e0; border-radius: 12px; overflow: hidden; }
-    #progressFill { height: 100%; width: 0%; background: #1976d2; border-radius: 12px; transition: width 0.2s ease; }
-    #progressText { margin-top: 6px; font-size: 14px; color: #666; }
-    .btn-clear { padding: 6px 12px; cursor: pointer; background: #fff; color: #666; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
-    .btn-clear:hover { background: #f5f5f5; border-color: #999; }
+    #progressBar { height: 24px; background: var(--progress-bg); border-radius: 12px; overflow: hidden; }
+    #progressFill { height: 100%; width: 0%; background: var(--progress-fill); border-radius: 12px; transition: width 0.2s ease; }
+    #progressText { margin-top: 6px; font-size: 14px; color: var(--text-muted); }
+    .btn-clear { padding: 6px 12px; cursor: pointer; background: var(--bg-input); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
+    .btn-clear:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .info-box { background: var(--info-bg); border: 1px solid var(--info-border); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; }
+    .info-box a { color: var(--accent); }
+    #importFile { display: none; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+    .modal-overlay.visible { display: flex; }
+    .modal-box { background: var(--bg-input); border: 1px solid var(--border); border-radius: 12px; padding: 24px; max-width: 400px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+    .modal-box p { margin: 0 0 20px; color: var(--text); line-height: 1.5; }
+    .modal-btns { display: flex; gap: 10px; justify-content: flex-end; }
+    .modal-btns button { padding: 10px 20px; border-radius: 6px; cursor: pointer; font-size: 14px; border: 1px solid var(--border); }
+    .modal-btn-cancel { background: var(--bg-sidebar); color: var(--text); }
+    .modal-btn-cancel:hover { background: var(--border); }
+    .modal-btn-proceed { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .modal-btn-proceed:hover { background: var(--accent-hover); }
+    .preview-panel {
+      width: 380px; min-width: 280px; max-width: 80vw;
+      background: var(--bg-sidebar); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+    }
+    .preview-resize-handle {
+      width: 6px; flex-shrink: 0; cursor: col-resize;
+      background: var(--border); transition: background 0.15s;
+      user-select: none; touch-action: none;
+    }
+    .preview-resize-handle:hover { background: var(--accent); }
+    .preview-resize-handle:active { background: var(--accent-hover); }
+    .preview-panel-title { padding: 12px 16px; font-weight: bold; font-size: 13px; color: var(--text-muted); border-bottom: 1px solid var(--border); background: var(--bg-input); }
+    .preview-content { flex: 1; overflow: auto; padding: 0; min-height: 120px; display: flex; flex-direction: column; }
+    .preview-content iframe.preview-iframe { flex: 1; width: 100%; min-height: 200px; border: none; background: #fff; }
+    [data-theme="dark"] .preview-content iframe.preview-iframe { background: #1e1e1e; }
+    .preview-placeholder { color: var(--text-muted); font-size: 13px; text-align: center; padding: 24px; margin: 16px; }
+    .preview-errors {
+      border-top: 1px solid var(--border); background: var(--bg-input);
+      padding: 10px 12px; font-size: 12px; max-height: 120px; overflow: auto;
+      font-family: monospace; white-space: pre-wrap; word-break: break-all;
+    }
+    .preview-errors[aria-hidden="true"] { display: none; }
+    .preview-errors-title { font-weight: bold; color: var(--text-muted); margin-bottom: 4px; }
+    .preview-errors.has-error .preview-errors-title { color: var(--error-text); }
+    .preview-errors-body { margin: 0; font-size: 11px; color: var(--error-text); }
+    .preview-node { border: 1px dashed var(--border); border-radius: 4px; margin: 6px 0 6px 12px; padding: 8px 10px; background: var(--bg-input); color: var(--text); }
+    .preview-node-tag { font-weight: bold; color: var(--accent); margin-right: 6px; }
+    .preview-node-class { color: var(--text-muted); word-break: break-all; }
+    .preview-node-children { margin-left: 8px; border-left: 2px solid var(--border); padding-left: 8px; }
+    @media (max-width: 768px) {
+      .app-wrap { flex-direction: column; }
+      .sidebar { width: 100%; min-height: 200px; border-right: none; border-bottom: 1px solid var(--border); }
+      .sidebar.sidebar-hidden { width: 100%; min-width: 100%; min-height: 0; padding: 0; }
+      .preview-resize-handle { width: 100%; height: 8px; cursor: row-resize; }
+      .preview-panel { width: 100% !important; max-width: none; min-height: 280px; border-left: none; border-top: 1px solid var(--border); }
+    }
   </style>
 </head>
 <body>
 
-  <h2>React Structurizer MVP</h2>
-  <p style="color:#666; font-size:14px; margin-bottom:16px;">React 컴포넌트 코드를 붙여넣으면 Vite + React 프로젝트 구조의 ZIP을 생성합니다. GitHub에 올려 <code>npm install && npm run dev</code>로 바로 실행할 수 있습니다.</p>
+  <div class="app-wrap">
+    <div class="sidebar-wrap" id="sidebarWrap">
+      <button type="button" class="sidebar-toggle" id="sidebarToggle" title="사이드바 숨기기">◀</button>
+      <aside class="sidebar" id="sidebar">
+    <div class="sidebar-title">히스토리 · 저장</div>
+    <div class="sidebar-btns">
+      <button type="button" id="btnSave">💾 현재 저장</button>
+      <button type="button" id="btnExport">📤 코드 내보내기 (.jsx)</button>
+      <button type="button" id="btnImport">📥 불러오기 (.jsx / .json)</button>
+      <button type="button" id="btnTheme">🌓 테마 전환</button>
+    </div>
+    <input type="file" id="importFile" accept=".json,.jsx,.js,application/json,text/plain" />
+    <div class="sidebar-title">저장된 작업</div>
+    <div class="history-list" id="historyList"></div>
+  </aside>
 
-  <div style="background:#e3f2fd; border:1px solid #90caf9; border-radius:8px; padding:12px 16px; margin-bottom:16px; font-size:13px;">
-    <strong>이 앱 실행 방법</strong>
-    <ul style="margin:8px 0 0 0; padding-left:20px;">
-      <li><strong>Node.js 설치됨:</strong> 터미널에서 <code>npm start</code> → 브라우저에서 http://localhost:3000 접속</li>
-      <li><strong>Node.js 없음:</strong> <a href="https://nodejs.org/ko" target="_blank" rel="noopener">Node.js 설치</a> 후 위 방법 사용. 또는 Python이 있으면 <code>python -m http.server 3000</code> 실행 후 http://localhost:3000 접속</li>
-    </ul>
-    <p style="margin:8px 0 0 0; color:#1565c0;"><strong>생성된 ZIP 실행 시:</strong> 압축 해제 후 <code>실행.bat</code> 더블클릭. “npm이 설치되어 있지 않습니다” 메시지와 Node.js 설치 링크가 표시됩니다.</p>
+    <div class="sidebar-resize-handle" id="sidebarResizeHandle" title="드래그하여 사이드바 너비 조절" aria-label="사이드바 크기 조절"></div>
+    <main class="main">
+    <div class="header-row">
+      <h2>React Structurizer MVP by 박중희</h2>
+      <button type="button" class="theme-toggle" id="themeToggle">라이트</button>
+    </div>
+    <p style="color:var(--text-muted); font-size:14px; margin-bottom:16px;">React 컴포넌트 코드를 붙여넣으면 Vite + React 프로젝트 구조의 ZIP을 생성합니다. GitHub에 올려 <code>npm install && npm run dev</code>로 바로 실행할 수 있습니다.</p>
+
+    <div class="info-box">
+      <strong>이 앱 실행 방법</strong>
+      <ul style="margin:8px 0 0 0; padding-left:20px;">
+        <li><strong>Node.js 설치됨:</strong> 터미널에서 <code>npm start</code> → 브라우저에서 http://localhost:3000 접속</li>
+        <li><strong>Node.js 없음:</strong> <a href="https://nodejs.org/ko" target="_blank" rel="noopener">Node.js 설치</a> 후 위 방법 사용.</li>
+      </ul>
+      <p style="margin:8px 0 0 0;"><strong>생성된 ZIP:</strong> 압축 해제 후 <code>실행.bat</code> 더블클릭. Windows 보안 경고 시 bat 파일 우클릭 → 속성 → 차단 해제.</p>
+    </div>
+
+    <label for="projectName">프로젝트 이름 (폴더명):</label>
+    <input type="text" id="projectName" value="" placeholder="프로젝트 이름을 입력하세요" />
+
+    <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
+      <label for="codeArea" style="margin-top:0;">메인 React 컴포넌트 코드:</label>
+      <button type="button" class="btn-clear" id="btnClearCode">내용 지우기</button>
+    </div>
+    <textarea id="codeArea" placeholder="import React, { useState } from 'react';\nimport { Icon } from 'lucide-react';\n\nexport default function App() {\n  return <div>Hello</div>;\n}\n\n→ import 포함한 전체 코드를 붙여넣으세요. 비워두면 기본 앱이 들어갑니다."></textarea>
+
+    <label>추가 npm 패키지 (필요한 것만 선택):</label>
+    <div class="extra-packages" id="extraPackages">
+      <label><input type="checkbox" name="extraPkg" value="lucide-react" checked /> lucide-react</label>
+      <label><input type="checkbox" name="extraPkg" value="react-router-dom" /> react-router-dom</label>
+      <label><input type="checkbox" name="extraPkg" value="axios" /> axios</label>
+      <label><input type="checkbox" name="extraPkg" value="zustand" /> zustand</label>
+      <label><input type="checkbox" name="extraPkg" value="react-hook-form" /> react-hook-form</label>
+      <label><input type="checkbox" name="extraPkg" value="date-fns" /> date-fns</label>
+      <label><input type="checkbox" name="extraPkg" value="clsx" /> clsx</label>
+      <label><input type="checkbox" name="extraPkg" value="framer-motion" /> framer-motion</label>
+      <label><input type="checkbox" name="extraPkg" value="recharts" /> recharts</label>
+      <label><input type="checkbox" name="extraPkg" value="react-dropzone" /> react-dropzone</label>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" id="tailwindInclude" checked />
+        <span>Tailwind CSS 포함 (기본 권장)</span>
+      </label>
+    </div>
+
+    <button type="button" class="primary" onclick="generateProject()">Generate ZIP (GitHub용 프로젝트 생성)</button>
+    <div id="progressWrap">
+      <div id="progressBar"><div id="progressFill"></div></div>
+      <div id="progressText">0%</div>
+    </div>
+    <div id="errorMsg" role="alert"></div>
+  </main>
+
+    <div class="preview-resize-handle" id="previewResizeHandle" title="드래그하여 미리보기 너비 조절" aria-label="미리보기 창 크기 조절"></div>
+    <aside class="preview-panel" id="previewPanel">
+      <div class="preview-panel-title">UI 구조 미리보기</div>
+      <div class="preview-content" id="previewContent">
+        <div class="preview-placeholder" id="previewPlaceholder">코드를 입력하면 렌더링된 UI가 여기에 표시됩니다.</div>
+        <iframe class="preview-iframe" id="previewIframe" style="display:none;" title="UI 미리보기"></iframe>
+      </div>
+      <div class="preview-errors has-error" id="previewErrors" role="alert" aria-hidden="true">
+        <div class="preview-errors-title">오류 / 경고</div>
+        <pre class="preview-errors-body" id="previewErrorsBody"></pre>
+      </div>
+    </aside>
   </div>
 
-  <label for="projectName">프로젝트 이름 (폴더명):</label>
-  <input type="text" id="projectName" value="generated-react-app" />
-
-  <div style="display:flex; align-items:center; gap:8px; margin-top:12px;">
-    <label for="codeArea" style="margin-top:0;">메인 React 컴포넌트 코드:</label>
-    <button type="button" class="btn-clear" onclick="document.getElementById('codeArea').value='';">내용 지우기</button>
+  <div class="modal-overlay" id="duplicateZipModal" role="dialog" aria-labelledby="duplicateZipTitle" aria-modal="true">
+    <div class="modal-box">
+      <p id="duplicateZipTitle">코드내용이 동일합니다. 이미 이 내용으로 앱을 만들었습니다. 다시할까요?</p>
+      <div class="modal-btns">
+        <button type="button" class="modal-btn-cancel" id="duplicateZipCancel">취소</button>
+        <button type="button" class="modal-btn-proceed" id="duplicateZipProceed">진행</button>
+      </div>
+    </div>
   </div>
-  <textarea id="codeArea" placeholder="import React, { useState } from 'react';\nimport { Icon } from 'lucide-react';\n\nexport default function App() {\n  return <div>Hello</div>;\n}\n\n→ 위처럼 import 포함한 전체 코드를 그대로 붙여넣으세요. 이 코드가 App.jsx로 들어가 메인 컴포넌트가 됩니다. 비워두면 기본 앱이 들어갑니다."></textarea>
-
-  <label>추가 npm 패키지 (필요한 것만 선택):</label>
-  <div class="extra-packages" id="extraPackages">
-    <label><input type="checkbox" name="extraPkg" value="lucide-react" checked /> lucide-react</label>
-    <label><input type="checkbox" name="extraPkg" value="react-router-dom" /> react-router-dom</label>
-    <label><input type="checkbox" name="extraPkg" value="axios" /> axios</label>
-    <label><input type="checkbox" name="extraPkg" value="zustand" /> zustand</label>
-    <label><input type="checkbox" name="extraPkg" value="react-hook-form" /> react-hook-form</label>
-    <label><input type="checkbox" name="extraPkg" value="date-fns" /> date-fns</label>
-    <label><input type="checkbox" name="extraPkg" value="clsx" /> clsx</label>
-    <label><input type="checkbox" name="extraPkg" value="framer-motion" /> framer-motion</label>
-    <label><input type="checkbox" name="extraPkg" value="recharts" /> recharts</label>
-    <label><input type="checkbox" name="extraPkg" value="react-dropzone" /> react-dropzone</label>
-  </div>
-
-  <div style="margin-top:12px;">
-    <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer;">
-      <input type="checkbox" id="tailwindInclude" checked />
-      <span>Tailwind CSS 포함 (className 스타일 사용 시 체크, 기본 권장)</span>
-    </label>
-  </div>
-
-  <button type="button" onclick="generateProject()">Generate ZIP (GitHub용 프로젝트 생성)</button>
-  <div id="progressWrap">
-    <div id="progressBar"><div id="progressFill"></div></div>
-    <div id="progressText">0%</div>
-  </div>
-  <div id="errorMsg" role="alert"></div>
 
   <script src="app.js"></script>
 
