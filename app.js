@@ -2,6 +2,7 @@
   'use strict';
 
   var SCRIPT_TAG_END = '</script>';
+  var currentSourceExt = 'jsx';
 
   function getProjectName() {
     var el = document.getElementById('projectName');
@@ -10,6 +11,38 @@
 
   function getAppCode() {
     return document.getElementById('codeArea').value.trim();
+  }
+
+  function getFileExt(name) {
+    var parts = String(name || '').toLowerCase().split('.');
+    return parts.length > 1 ? parts.pop() : '';
+  }
+
+  function isTypeScriptExt(ext) {
+    return ext === 'ts' || ext === 'tsx';
+  }
+
+  function codeLooksLikeTypeScript(code) {
+    if (!code || typeof code !== 'string') return false;
+    return /\binterface\s+[A-Za-z_$][\w$]*\b/.test(code) ||
+      /\btype\s+[A-Za-z_$][\w$]*\s*=/.test(code) ||
+      /\bReact\.[A-Za-z]+Event\b/.test(code) ||
+      /\buseRef\s*<[^>]+>/.test(code) ||
+      /\)\s*:\s*[A-Za-z_$][\w$<>,\s|.&[\]?]*\s*=>/.test(code) ||
+      /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*:\s*[A-Za-z_$][\w$<>,\s|.&[\]?]*/.test(code);
+  }
+
+  function shouldUseTypeScript(code) {
+    return isTypeScriptExt(currentSourceExt) || codeLooksLikeTypeScript(code || getAppCode());
+  }
+
+  function projectNameFromFileName(name) {
+    var base = String(name || '').replace(/\.[^.]+$/, '').trim();
+    return base.replace(/[^a-zA-Z0-9_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+  }
+
+  function toScriptJson(value) {
+    return JSON.stringify(value).replace(/<\//g, '<\\/');
   }
 
   function getExtraPackages() {
@@ -30,14 +63,37 @@
     var requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
     var m;
     while ((m = fromRegex.exec(code)) !== null) {
-      var pkg = m[1].split('/')[0].trim();
+      var spec = m[1].trim();
+      if (spec.charAt(0) === '.' || spec.charAt(0) === '/') continue;
+      var pkg = spec.charAt(0) === '@' ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0].trim();
       if (pkg && pkg !== 'react' && pkg !== 'react-dom') packages[pkg] = true;
     }
     while ((m = requireRegex.exec(code)) !== null) {
-      var pkg = m[1].split('/')[0].trim();
+      var spec = m[1].trim();
+      if (spec.charAt(0) === '.' || spec.charAt(0) === '/') continue;
+      var pkg = spec.charAt(0) === '@' ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0].trim();
       if (pkg && pkg !== 'react' && pkg !== 'react-dom') packages[pkg] = true;
     }
     return Object.keys(packages);
+  }
+
+  function getImportSpecifiersFromCode(code) {
+    var specs = Object.create(null);
+    if (!code || typeof code !== 'string') return [];
+    var fromRegex = /from\s+['"]([^'"]+)['"]/g;
+    var sideEffectRegex = /import\s+['"]([^'"]+)['"]/g;
+    var requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+    var m;
+    function add(spec) {
+      spec = (spec || '').trim();
+      if (!spec || spec.charAt(0) === '.' || spec.charAt(0) === '/') return;
+      if (/\.(css|scss|sass|less|svg|png|jpg|jpeg|gif|webp)$/i.test(spec)) return;
+      specs[spec] = true;
+    }
+    while ((m = fromRegex.exec(code)) !== null) add(m[1]);
+    while ((m = sideEffectRegex.exec(code)) !== null) add(m[1]);
+    while ((m = requireRegex.exec(code)) !== null) add(m[1]);
+    return Object.keys(specs);
   }
 
   /** 코드에서 import/require 패키지명 추출 후, 추가 npm 패키지 체크박스 자동 선택 */
@@ -48,11 +104,15 @@
     var requireRegex = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
     var m;
     while ((m = fromRegex.exec(code)) !== null) {
-      var pkg = m[1].split('/')[0];
+      var spec = m[1].trim();
+      if (spec.charAt(0) === '.' || spec.charAt(0) === '/') continue;
+      var pkg = spec.charAt(0) === '@' ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
       if (pkg && pkg !== 'react' && pkg !== 'react-dom') packages[pkg] = true;
     }
     while ((m = requireRegex.exec(code)) !== null) {
-      var pkg = m[1].split('/')[0];
+      var spec = m[1].trim();
+      if (spec.charAt(0) === '.' || spec.charAt(0) === '/') continue;
+      var pkg = spec.charAt(0) === '@' ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
       if (pkg && pkg !== 'react' && pkg !== 'react-dom') packages[pkg] = true;
     }
     var checkboxes = document.querySelectorAll('input[name="extraPkg"]');
@@ -107,7 +167,7 @@
     ].join('\n');
   }
 
-  function getPackageJson(projectName, extraPackages, tailwindIncluded) {
+  function getPackageJson(projectName, extraPackages, tailwindIncluded, useTypeScript) {
     var deps = ['"react": "^18.2.0"', '"react-dom": "^18.2.0"'];
     extraPackages.forEach(function (pkg) {
       var name = (pkg.split('/')[0]).replace(/@/g, '').replace(/\s/g, '');
@@ -116,6 +176,9 @@
       }
     });
     var devDeps = ['"vite": "^5.0.0"', '"@vitejs/plugin-react": "^4.0.0"'];
+    if (useTypeScript) {
+      devDeps.push('"typescript": "^5.4.0"', '"@types/react": "^18.2.0"', '"@types/react-dom": "^18.2.0"');
+    }
     if (tailwindIncluded) {
       devDeps.push('"tailwindcss": "^3.4.0"', '"postcss": "^8.4.0"', '"autoprefixer": "^10.4.0"');
     }
@@ -149,7 +212,55 @@
     ].join('\n');
   }
 
-  function getMainJsx(tailwindIncluded) {
+  function getMainJsx(tailwindIncluded, useTypeScript) {
+    if (useTypeScript) {
+      var tsLines = [
+        "import React, { type ReactNode } from 'react'",
+        "import ReactDOM from 'react-dom/client'",
+        "import App from './App'"
+      ];
+      if (tailwindIncluded) {
+        tsLines.push("import './index.css'");
+      }
+      tsLines.push(
+        '',
+        'type ErrorBoundaryProps = { children: ReactNode }',
+        "type ErrorBoundaryState = { hasError: boolean; message: string }",
+        '',
+        'class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {',
+        "  state: ErrorBoundaryState = { hasError: false, message: '' }",
+        '  static getDerivedStateFromError(err: unknown): ErrorBoundaryState {',
+        '    return { hasError: true, message: err instanceof Error ? err.message : String(err) }',
+        '  }',
+        '  componentDidCatch(err: unknown, info: React.ErrorInfo) {',
+        '    console.error(err, info)',
+        '  }',
+        '  render() {',
+        '    if (this.state.hasError)',
+        '      return (',
+        '        <div style={{ padding: 20, fontFamily: "sans-serif" }}>',
+        '          <h2>렌더링 오류</h2>',
+        '          <pre style={{ background: "#f5f5f5", padding: 10 }}>{this.state.message}</pre>',
+        '          <button onClick={() => this.setState({ hasError: false })}>다시 시도</button>',
+        '        </div>',
+        '      )',
+        '    return this.props.children',
+        '  }',
+        '}',
+        '',
+        "const rootEl = document.getElementById('root')",
+        'if (rootEl) {',
+        '  ReactDOM.createRoot(rootEl).render(',
+        '    <React.StrictMode>',
+        '      <ErrorBoundary>',
+        '        <App />',
+        '      </ErrorBoundary>',
+        '    </React.StrictMode>,',
+        '  )',
+        '}'
+      );
+      return tsLines.join('\n');
+    }
     var lines = [
       "import React from 'react'",
       "import ReactDOM from 'react-dom/client'",
@@ -192,7 +303,8 @@
     return lines.join('\n');
   }
 
-  function getIndexHtml(projectName) {
+  function getIndexHtml(projectName, useTypeScript) {
+    var mainFile = useTypeScript ? 'main.tsx' : 'main.jsx';
     return [
       '<!doctype html>',
       '<html>',
@@ -203,9 +315,35 @@
       '</head>',
       '<body>',
       '<div id="root"></div>',
-      '<script type="module" src="/src/main.jsx">' + SCRIPT_TAG_END,
+      '<script type="module" src="/src/' + mainFile + '">' + SCRIPT_TAG_END,
       '</body>',
       '</html>'
+    ].join('\n');
+  }
+
+  function getTsConfig() {
+    return [
+      '{',
+      '  "compilerOptions": {',
+      '    "target": "ES2020",',
+      '    "useDefineForClassFields": true,',
+      '    "lib": ["DOM", "DOM.Iterable", "ES2020"],',
+      '    "allowJs": false,',
+      '    "skipLibCheck": true,',
+      '    "esModuleInterop": true,',
+      '    "allowSyntheticDefaultImports": true,',
+      '    "strict": false,',
+      '    "forceConsistentCasingInFileNames": true,',
+      '    "module": "ESNext",',
+      '    "moduleResolution": "Node",',
+      '    "resolveJsonModule": true,',
+      '    "isolatedModules": true,',
+      '    "noEmit": true,',
+      '    "jsx": "react-jsx"',
+      '  },',
+      '  "include": ["src"],',
+      '  "references": []',
+      '}'
     ].join('\n');
   }
 
@@ -421,6 +559,7 @@
     var projectName = getProjectName();
     var code = getAppCode();
     var appCode = code || getDefaultAppJsx();
+    var useTypeScript = shouldUseTypeScript(appCode);
     var extraPackages = getExtraPackages();
     var packagesFromCode = getPackagesFromCode(appCode);
     var allPackages = extraPackages.slice();
@@ -434,16 +573,20 @@
     var zip = new JSZip();
     var srcFolder = zip.folder(projectName + '/src');
 
-    zip.file(projectName + '/package.json', getPackageJson(projectName, allPackages, tailwindIncluded));
+    zip.file(projectName + '/package.json', getPackageJson(projectName, allPackages, tailwindIncluded, useTypeScript));
     setProgress(15, '15% - 파일 구성 중...');
     zip.file(projectName + '/vite.config.js', getViteConfig());
-    zip.file(projectName + '/index.html', getIndexHtml(projectName));
+    zip.file(projectName + '/index.html', getIndexHtml(projectName, useTypeScript));
     zip.file(projectName + '/.gitignore', getGitignore());
     zip.file(projectName + '/README.md', getReadme(projectName));
     zip.file(projectName + '/실행 전 읽기.txt', getRunFirstTxt());
     zip.file(projectName + '/실행.bat', getRunBat());
-    srcFolder.file('App.jsx', appCode);
-    srcFolder.file('main.jsx', getMainJsx(tailwindIncluded));
+    srcFolder.file(useTypeScript ? 'App.tsx' : 'App.jsx', appCode);
+    srcFolder.file(useTypeScript ? 'main.tsx' : 'main.jsx', getMainJsx(tailwindIncluded, useTypeScript));
+    if (useTypeScript) {
+      zip.file(projectName + '/tsconfig.json', getTsConfig());
+      srcFolder.file('vite-env.d.ts', '/// <reference types="vite/client" />\n');
+    }
     setProgress(30, '30% - ZIP 압축 중...');
 
     if (tailwindIncluded) {
@@ -510,7 +653,8 @@
       projectName: (projectNameEl && projectNameEl.value) || '',
       code: (codeEl && codeEl.value) || '',
       extraPackages: extraPackages,
-      tailwindIncluded: tailwindEl ? tailwindEl.checked : true
+      tailwindIncluded: tailwindEl ? tailwindEl.checked : true,
+      sourceExt: currentSourceExt
     };
   }
 
@@ -521,6 +665,7 @@
     var tailwindEl = document.getElementById('tailwindInclude');
     if (projectNameEl && data.projectName != null) projectNameEl.value = data.projectName;
     if (codeEl && data.code != null) codeEl.value = data.code;
+    if (data.sourceExt) currentSourceExt = isTypeScriptExt(data.sourceExt) ? 'tsx' : 'jsx';
     if (tailwindEl && data.tailwindIncluded != null) tailwindEl.checked = !!data.tailwindIncluded;
     var pkgs = data.extraPackages || [];
     var checkboxes = document.querySelectorAll('input[name="extraPkg"]');
@@ -553,6 +698,7 @@
           code: state.code,
           extraPackages: state.extraPackages,
           tailwindIncluded: state.tailwindIncluded,
+          sourceExt: state.sourceExt,
           createdAt: Date.now()
         };
         store.add(record);
@@ -653,6 +799,132 @@
     return div.innerHTML;
   }
 
+  function getPreviewImportMap(code) {
+    var imports = {
+      react: 'https://esm.sh/react@18.2.0?dev',
+      'react-dom': 'https://esm.sh/react-dom@18.2.0?dev',
+      'react-dom/client': 'https://esm.sh/react-dom@18.2.0/client?dev',
+      'react/jsx-runtime': 'https://esm.sh/react@18.2.0/jsx-runtime?dev',
+      'react/jsx-dev-runtime': 'https://esm.sh/react@18.2.0/jsx-dev-runtime?dev'
+    };
+    var specs = getImportSpecifiersFromCode(code);
+    specs.forEach(function (spec) {
+      if (imports[spec]) return;
+      imports[spec] = 'https://esm.sh/' + spec + '?dev&deps=react@18.2.0,react-dom@18.2.0&external=react,react-dom';
+    });
+    return { imports: imports };
+  }
+
+  function preparePreviewSource(code) {
+    code = (code || '').replace(/^\s*import\s+['"][./][^'"]+\.(css|scss|sass|less)['"];?\s*$/gmi, '');
+    if (!/\bexport\s+default\b/.test(code) && !/\bexport\s+(?:function|const|let|var|class)\s+App\b/.test(code) && /\b(?:function|const|let|var|class)\s+App\b/.test(code)) {
+      code += '\n\nexport default App;';
+    }
+    return code;
+  }
+
+  function getPreviewWindowHtml(code, projectName, useTailwind) {
+    code = preparePreviewSource(code);
+    var importMap = getPreviewImportMap(code);
+    var title = projectName || 'React Preview';
+    var tailwindScript = useTailwind ? '<script src="https://cdn.tailwindcss.com"><\/script>' : '';
+    return [
+      '<!doctype html>',
+      '<html lang="ko">',
+      '<head>',
+      '<meta charset="utf-8" />',
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+      '<title>' + escapeHtml(title) + ' - 미리보기</title>',
+      '<script type="importmap">' + JSON.stringify(importMap) + SCRIPT_TAG_END,
+      tailwindScript,
+      '<script src="https://unpkg.com/@babel/standalone/babel.min.js">' + SCRIPT_TAG_END,
+      '<style>',
+      ':root{color-scheme:light dark;}',
+      'body{margin:0;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8fafc;color:#111827;}',
+      '#toolbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid #d1d5db;background:rgba(255,255,255,.94);backdrop-filter:blur(8px);}',
+      '#toolbar strong{font-size:14px;}',
+      '#toolbar span{font-size:12px;color:#4b5563;}',
+      '#toolbar button{border:1px solid #d1d5db;background:#fff;color:#111827;border-radius:6px;padding:6px 10px;cursor:pointer;}',
+      '#toolbar button:hover{background:#eff6ff;border-color:#60a5fa;}',
+      '#root{min-height:calc(100vh - 46px);}',
+      '#status{padding:24px;color:#4b5563;font-size:14px;}',
+      '#error{display:none;margin:16px;padding:14px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#991b1b;white-space:pre-wrap;font:12px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}',
+      '@media (prefers-color-scheme:dark){body{background:#111827;color:#f9fafb;}#toolbar{background:rgba(17,24,39,.94);border-color:#374151;}#toolbar span{color:#d1d5db;}#toolbar button{background:#1f2937;color:#f9fafb;border-color:#4b5563;}#status{color:#d1d5db;}#error{background:#450a0a;border-color:#7f1d1d;color:#fecaca;}}',
+      '</style>',
+      '</head>',
+      '<body>',
+      '<div id="toolbar"><div><strong>' + escapeHtml(title) + '</strong><span> · 실시간 새창 미리보기</span></div><button type="button" onclick="location.reload()">새로고침</button></div>',
+      '<div id="status">컴포넌트를 변환하고 렌더링하는 중...</div>',
+      '<pre id="error"></pre>',
+      '<div id="root"></div>',
+      '<script type="module">',
+      'import React from "react";',
+      'import ReactDOM from "react-dom/client";',
+      'const source = ' + toScriptJson(code) + ';',
+      'const statusEl = document.getElementById("status");',
+      'const errorEl = document.getElementById("error");',
+      'function showError(err){',
+      '  const msg = err && err.stack ? err.stack : String(err);',
+      '  statusEl.style.display = "none";',
+      '  errorEl.style.display = "block";',
+      '  errorEl.textContent = msg;',
+      '}',
+      'class ErrorBoundary extends React.Component {',
+      '  constructor(props){ super(props); this.state = { error: null }; }',
+      '  static getDerivedStateFromError(error){ return { error }; }',
+      '  componentDidCatch(error, info){ console.error(error, info); }',
+      '  render(){',
+      '    if (this.state.error) return React.createElement("pre", { style: { margin: 16, padding: 14, border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2", color: "#991b1b", whiteSpace: "pre-wrap" } }, this.state.error.stack || String(this.state.error));',
+      '    return this.props.children;',
+      '  }',
+      '}',
+      'try {',
+      '  if (!window.Babel) throw new Error("Babel 변환기를 불러오지 못했습니다. 인터넷 연결 또는 CDN 접근을 확인하세요.");',
+      '  const transformed = window.Babel.transform(source, {',
+      '    filename: "App.tsx",',
+      '    sourceType: "module",',
+      '    presets: [["typescript", { ignoreExtensions: true }], ["react", { runtime: "automatic" }]],',
+      '    plugins: ["syntax-jsx"]',
+      '  }).code;',
+      '  const blob = new Blob([transformed], { type: "text/javascript" });',
+      '  const moduleUrl = URL.createObjectURL(blob);',
+      '  const mod = await import(moduleUrl);',
+      '  URL.revokeObjectURL(moduleUrl);',
+      '  const App = mod.default || mod.App;',
+      '  if (!App) throw new Error("export default App 또는 named export App을 찾을 수 없습니다.");',
+      '  const appElement = React.isValidElement(App) ? App : React.createElement(App);',
+      '  statusEl.style.display = "none";',
+      '  ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(ErrorBoundary, null, appElement));',
+      '} catch (err) {',
+      '  console.error(err);',
+      '  showError(err);',
+      '}',
+      SCRIPT_TAG_END,
+      '</body>',
+      '</html>'
+    ].join('\n');
+  }
+
+  function openPreviewWindow() {
+    var code = getAppCode();
+    if (!code) {
+      showError('미리보기할 React 컴포넌트 코드를 먼저 입력하거나 .tsx/.jsx 파일을 불러와 주세요.');
+      return;
+    }
+    hideError();
+    var projectName = getProjectName() || 'React Preview';
+    var useTailwind = getTailwindInclude();
+    var preview = window.open('', 'react_structurizer_preview', 'width=1200,height=900,resizable=yes,scrollbars=yes');
+    if (!preview) {
+      showError('팝업이 차단되어 새창 미리보기를 열 수 없습니다. 브라우저 팝업 허용 후 다시 실행해 주세요.');
+      return;
+    }
+    preview.document.open();
+    preview.document.write(getPreviewWindowHtml(code, projectName, useTailwind));
+    preview.document.close();
+    preview.focus();
+  }
+
   /** JSX return 부분을 정적 HTML 문자열로 변환 (미리보기용). 반환: { html, errors } */
   function jsxToStaticHtml(code) {
     var errors = [];
@@ -734,56 +1006,25 @@
   }
 
   function renderPreview() {
-    var code = (document.getElementById('codeArea') && document.getElementById('codeArea').value) || '';
     var placeholder = document.getElementById('previewPlaceholder');
     var iframe = document.getElementById('previewIframe');
     var errorsEl = document.getElementById('previewErrors');
     var errorsBody = document.getElementById('previewErrorsBody');
     if (!placeholder || !iframe) return;
-    var result = jsxToStaticHtml(code);
-    var html = result.html;
-    var useTailwind = document.getElementById('tailwindInclude') && document.getElementById('tailwindInclude').checked;
-    if (!html) {
-      var nodes = parseJsxStructure(code);
-      if (nodes && nodes.length > 0) {
-        html = nodes.map(function (n) {
-          var cls = n.className ? ' class="' + escapeHtml(n.className) + '"' : '';
-          return '<' + n.tag + cls + '></' + n.tag + '>';
-        }).join('\n');
-        html = '<div class="preview-fallback">' + html + '</div>';
-        if (result.errors.length) result.errors.push('return 구문 없이 태그만으로 미리보기를 생성했습니다.');
-      }
-    }
+    var hasCode = !!((document.getElementById('codeArea') && document.getElementById('codeArea').value) || '').trim();
     if (errorsBody) {
-      errorsBody.textContent = result.errors.length ? result.errors.join('\n') : '';
+      errorsBody.textContent = '';
       if (errorsEl) {
-        errorsEl.setAttribute('aria-hidden', result.errors.length ? 'false' : 'true');
-        errorsEl.classList.toggle('has-error', result.errors.length > 0);
+        errorsEl.setAttribute('aria-hidden', 'true');
+        errorsEl.classList.remove('has-error');
       }
     }
-    if (!html) {
-      placeholder.style.display = 'block';
-      iframe.style.display = 'none';
-      try { iframe.srcdoc = ''; } catch (e) {}
-      return;
-    }
-    placeholder.style.display = 'none';
-    iframe.style.display = 'block';
-    var tailwindLink = useTailwind
-      ? '<script src="https://cdn.tailwindcss.com"><\/script>'
-      : '';
-    var baseCss = 'body{margin:0;padding:12px;font-family:system-ui,sans-serif;}.preview-fallback > * { margin: 6px 0; padding: 8px; border: 1px dashed #ccc; border-radius: 4px; }.fragment{display:contents;}';
-    var htmlDoc = '<!DOCTYPE html><html><head><meta charset="utf-8">' + tailwindLink + '<style>' + baseCss + '</style></head><body><div id="root">' + html + '</div></body></html>';
-    try {
-      iframe.srcdoc = htmlDoc;
-    } catch (err) {
-      if (errorsBody) {
-        errorsBody.textContent = (errorsBody.textContent ? errorsBody.textContent + '\n' : '') + 'iframe 렌더 오류: ' + (err.message || String(err));
-        if (errorsEl) { errorsEl.setAttribute('aria-hidden', 'false'); errorsEl.classList.add('has-error'); }
-      }
-      var doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
-      if (doc) { doc.open(); doc.write(htmlDoc); doc.close(); }
-    }
+    iframe.style.display = 'none';
+    try { iframe.srcdoc = ''; } catch (e) {}
+    placeholder.style.display = 'block';
+    placeholder.textContent = hasCode
+      ? '정확한 미리보기는 아래 "새창 미리보기" 버튼으로 확인하세요.'
+      : '코드를 입력하거나 .tsx/.jsx 파일을 불러온 뒤 새창 미리보기를 실행하세요.';
   }
 
   var previewTimer = null;
@@ -795,12 +1036,14 @@
     }, 400);
   }
 
-  /** 단일 파일 React 컴포넌트(.jsx)로 코드만 저장. VSCode/Cursor에서 React 코드로 열 수 있음 */
+  /** 단일 파일 React 컴포넌트(.jsx/.tsx)로 코드만 저장. VSCode/Cursor에서 React 코드로 열 수 있음 */
   function exportSrc() {
     var code = (document.getElementById('codeArea') && document.getElementById('codeArea').value) || '';
     var projectName = (document.getElementById('projectName') && document.getElementById('projectName').value) || '';
-    var fileName = (projectName.trim() || 'Component') + '.jsx';
-    var content = '// Single File React Component (React Structurizer MVP by 박중희)\n// VSCode/Cursor: 우하단 "언어 모드"에서 "JavaScript React" 선택 시 JSX 문법 강조\n\n' + code;
+    var ext = shouldUseTypeScript(code) ? 'tsx' : 'jsx';
+    var fileName = (projectName.trim() || 'Component') + '.' + ext;
+    var langName = ext === 'tsx' ? 'TypeScript React' : 'JavaScript React';
+    var content = '// Single File React Component (React Structurizer MVP by 박중희)\n// VSCode/Cursor: 우하단 "언어 모드"에서 "' + langName + '" 선택 시 JSX/TSX 문법 강조\n\n' + code;
     var blob = new Blob([content], { type: 'text/plain; charset=utf-8' });
     if (typeof saveAs !== 'undefined') {
       saveAs(blob, fileName);
@@ -841,7 +1084,7 @@
     var file = e.target && e.target.files && e.target.files[0];
     if (!file) return;
     var reader = new FileReader();
-    var ext = (file.name || '').toLowerCase().split('.').pop();
+    var ext = getFileExt(file.name);
     reader.onload = function (ev) {
       var text = ev.target.result;
       if (ext === 'json') {
@@ -854,10 +1097,20 @@
           alert('JSON 파일 형식이 올바르지 않습니다.');
         }
       } else {
+        if (['jsx', 'js', 'tsx', 'ts'].indexOf(ext) === -1) {
+          alert('지원하는 파일 형식은 .jsx, .js, .tsx, .ts, .json 입니다.');
+          return;
+        }
+        currentSourceExt = isTypeScriptExt(ext) ? 'tsx' : 'jsx';
         var code = text.replace(/^\/\/ Single File React Component[^\n]*\n?(\/\/[^\n]*\n?)?\s*/i, '').replace(/^\/\*\* Single File React Component[^*]*\*\/\s*\n?/i, '').trim();
         var codeEl = document.getElementById('codeArea');
         if (codeEl) codeEl.value = code;
+        var projectNameEl = document.getElementById('projectName');
+        if (projectNameEl && !projectNameEl.value.trim()) {
+          projectNameEl.value = projectNameFromFileName(file.name);
+        }
         syncExtraPackagesFromCode();
+        scheduleAutoSave();
         schedulePreview();
       }
     };
@@ -923,12 +1176,16 @@
   document.getElementById('btnExport') && document.getElementById('btnExport').addEventListener('click', exportSrc);
   document.getElementById('btnImport') && document.getElementById('btnImport').addEventListener('click', importJSON);
   document.getElementById('importFile') && document.getElementById('importFile').addEventListener('change', onImportFileChange);
+  document.getElementById('btnOpenPreview') && document.getElementById('btnOpenPreview').addEventListener('click', openPreviewWindow);
   document.getElementById('btnTheme') && document.getElementById('btnTheme').addEventListener('click', toggleTheme);
   document.getElementById('themeToggle') && document.getElementById('themeToggle').addEventListener('click', toggleTheme);
   document.getElementById('btnClearCode') && document.getElementById('btnClearCode').addEventListener('click', function () {
     var el = document.getElementById('codeArea');
     if (el) el.value = '';
+    currentSourceExt = 'jsx';
     syncExtraPackagesFromCode();
+    scheduleAutoSave();
+    schedulePreview();
   });
 
   document.getElementById('duplicateZipCancel') && document.getElementById('duplicateZipCancel').addEventListener('click', hideDuplicateZipModal);
